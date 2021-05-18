@@ -111,6 +111,7 @@ Inductive steps : cexpr -> cexpr -> Prop :=
 Notation " a ~> b " := (steps a b) (at level 55, left associativity).
 
 Inductive steps_star : cexpr -> cexpr -> Prop :=
+| steps_none : forall c, steps_star c c
 | steps_once : forall c1 c2, c1 ~> c2 -> steps_star c1 c2
 | steps_many : forall c1 c2 c3, c1 ~> c2 -> steps_star c2 c3 -> steps_star c1 c3.
 
@@ -121,6 +122,8 @@ Proof.
   intros.
 
   induction H.
+  *
+    assumption.
   *
     eapply steps_many.
     apply H.
@@ -137,6 +140,8 @@ Proof.
   intros.
   induction H.
   *
+    apply steps_none.
+  *
     eapply steps_once.
     apply steps_app_l.
     apply H.
@@ -151,6 +156,8 @@ Theorem steps_star_app_r : forall c1 c2 c3, (c1 ~>* c2) -> (c3 + c1) ~>* (c3 + c
 Proof.
   intros.
   induction H.
+  *
+    apply steps_none.
   *
     eapply steps_once.
     apply steps_app_r.
@@ -184,9 +191,13 @@ Theorem equiv_steps_star : forall c1 c2, c1 ~>* c2 -> c1 ~= c2.
 Proof.
   intros.
   induction H.
-  * apply equiv_steps.
+  *
+    apply equiv_refl.
+  *
+    apply equiv_steps.
     assumption.
-  * eapply equiv_trans.
+  *
+    eapply equiv_trans.
     apply equiv_steps.
     apply H.
     assumption.
@@ -216,6 +227,13 @@ Fixpoint cexpr_subst (v : cexpr) (f: fmap) : cexpr :=
   end.
 
 Notation " e ; f " := (cexpr_subst e f) (at level 60, no associativity).
+
+Theorem subst_app_distr :  forall c1 c2 f, (c1 + c2 ; f) = (c1 ; f) + (c2 ; f).
+Proof.
+  intros.
+  simpl.
+  reflexivity.
+Qed.
 
 Definition disjoint_cexpr_fmap (c : cexpr) (f: fmap) :=
   forall n, contains_var n c -> f n = None.
@@ -279,6 +297,8 @@ Theorem steps_star_subst : forall v1 v2, v1 ~>* v2 -> forall f, (v1; f) ~>* (v2;
 Proof.
   intros.
   induction H.
+  *
+    apply steps_none.
   *
     apply steps_once.
     apply steps_subst.
@@ -559,45 +579,6 @@ Proof.
 
     rewrite not_bcontains_var_contains_var.
     apply IHc2.
-Qed.
-
-Theorem subst_alpha_elim :
-  forall c n f, (alpha_elim c n ; f) = (alpha_elim c n; (fmap_del f n )).
-Proof.
-  intros.
-  induction c.
-  *
-    destruct (PeanoNat.Nat.eq_decidable n n0).
-    **
-      subst. simpl.
-      rewrite <- EqNat.beq_nat_refl.
-      simpl.
-      reflexivity.
-    **
-      simpl.
-      apply PeanoNat.Nat.eqb_neq in H.
-      rewrite PeanoNat.Nat.eqb_sym.
-      rewrite H.
-      simpl.
-      assert (fmap_del f n n0 = f n0). {
-        unfold fmap_del.
-        rewrite <- PeanoNat.Nat.eqb_sym.
-        rewrite H.
-        reflexivity.
-      }
-      rewrite H0.
-      reflexivity.
-  *
-    simpl.
-    reflexivity.
-  *
-    simpl.
-    reflexivity.
-  *
-    simpl.
-    rewrite IHc1.
-    rewrite IHc2.
-    reflexivity.
 Qed.
 
 (* Definition compile_1ary (c : cexpr) := alpha_elim c 0. *)
@@ -1081,6 +1062,17 @@ Qed.
 
 Definition sage c := L + c + (L + c).
 
+Theorem sage_intros_no_vars : forall c n, ~contains_var n c -> ~contains_var n (sage c).
+Proof.
+  intros.
+  apply not_bcontains_var_contains_var.
+  apply not_bcontains_var_contains_var in H.
+  simpl.
+  rewrite H.
+  simpl.
+  reflexivity.
+Qed.
+
 Theorem steps_star_sage : forall c, sage c ~>* c + (sage c).
 Proof.
   intros.
@@ -1328,152 +1320,675 @@ Qed.
 (* P a m = Z m b ( rec ( 0 ) ) *)
 (* P 0 1  = Z 1 b ( nxt ( 0 ( prv 1 ) ) ) *)
 
-Definition pre_recursive_combinator_action (b : nat) (r : cexpr) :=
+Definition pre_recursive_combinator_action1 (b : nat) (r : cexpr) :=
   eq_zro + (var 1) + rep b + (r ; (0 !-> (var 0 + (prv + var 1)), __)).
 
-Definition pre_recursive_combinator (b : nat) (r : cexpr) :=
-  compile_nary 1 (pre_recursive_combinator_action b r).
+Definition pre_recursive_combinator_action2 (b : cexpr) (r : cexpr) :=
+  eq_zro + (var 1) + b + (r ; (0 !-> (var 0 + (prv + var 1) + var 2), __)).
 
-Definition recursive_combinator (b : nat) (r : cexpr) :=
-  sage (pre_recursive_combinator b r).
+Definition pre_recursive_combinator1 (b : nat) (r : cexpr) :=
+  compile_nary 2 (pre_recursive_combinator_action1 b r).
 
-Theorem steps_star_recursive_combinator_base (base_case : nat) (rec : cexpr) :
-  (recursive_combinator base_case rec) + rep 0 ~>* rep base_case.
-Proof.
-  unfold recursive_combinator.
-  eapply steps_star_trans.
-  apply steps_star_app_l.
-  eapply steps_star_sage.
+Definition pre_recursive_combinator2 (b : cexpr) (r : cexpr) :=
+  compile_nary 3 (pre_recursive_combinator_action2 b r).
 
-  unfold pre_recursive_combinator.
-  eapply steps_star_trans.
-  apply steps_star_app_l.
-  apply steps_star_compile_1ary.
+Definition recursive_combinator1 (b : nat) (r : cexpr) :=
+  sage (pre_recursive_combinator1 b r).
 
-  unfold pre_recursive_combinator_action.
+Definition recursive_combinator2 (b : cexpr) (r : cexpr) :=
+  sage (pre_recursive_combinator2 b r).
 
-Definition recurses (f : nat -> nat) c :=
-  forall n, (c ; (0 !-> rep n, __)) ~>* rep (f (Datatypes.S n)).
-
-Theorem fixpoint_principle1 :
-  forall (f : nat -> nat) c, recurses f c ->
-                             fixpoint_
-                             exists d, forall n, d + rep n ~>* rep (f n).
-Proof.
-  intros.
-  exists 
-
-
-
-(* P a m n = Z m n ( nxt ( a (P m) n ) ) *)
-(* P 0 1 2 = Z 1 2 ( nxt ( 0 ( P 1 ) 2 ) ) *)
-Definition sum_op_precursor_action := eq_zro + var 1 + var 2 + ( nxt + ( var 0 + ( prv + var 1 ) + var 2 ) ).
-Definition sum_op_precursor := compile_nary 3 sum_op_precursor_action.
-Definition sum_op := sage sum_op_precursor.
-
-(* op that implements base case *)
-(* an imaginary that op works for m n, *)
-(* an op that uses it, and a proof that the substitution workeds for Sm, n *)
-
-
-
-(* P a m n = Z m 0 ( a (sum_op n (a (prv m) n) ) ) *)
-(* Definition mult_op_precursor_action := eq_zro + var 1 + var 2 + (n *)
-
-(* Base case *)
-(* Deriving an op that implements f m n *)
-(* op m 0 = f m 0 *)
-(* op m n = f m n -> op (S m) n = f (S m) n *)
-
-
-(* Theorem sum_op_computes_sum : forall n m, sum_op + rep n + rep m ~>* rep (m + n).
-(* forall n, op (rep 0) (rep n) ~>* rep ( func 0 n ) *)
-(* forall m n, op (S m) n ~>* rep ( func 0 n ) *)
-
-Theorem steps_star_sum_op :
-  forall c1 c2, sum_op + c1 + c2 ~>* eq_zro + c1 + c2 + (nxt + (sum_op + (prv + c1) + c2 )).
-Proof.
-  intros.
-  unfold sum_op at 1.
-
-  eapply steps_star_trans.
-  apply steps_star_app_l.
-  apply steps_star_app_l.
-  apply steps_star_sage.
-
-  fold sum_op.
-  unfold sum_op_precursor.
-  eapply steps_star_eq.
-  apply steps_star_compile_3ary.
-  unfold sum_op_precursor_action.
-  reflexivity.
-Qed.
-
-Theorem sum_op_computes_sum : forall n m, sum_op + rep n + rep m ~>* rep (m + n).
+Lemma not_contains_var_rep_n : forall n m, ~ contains_var m (rep n).
 Proof.
   intro n.
   induction n.
   *
     intros.
-    eapply steps_star_trans.
-    apply steps_star_sum_op.
-
-    unfold eq_zro.
-    eapply steps_star_trans.
-    apply steps_star_app_l.
-    apply steps_star_app_l.
-    apply steps_star_T.
-
-    unfold rep at 1.
-    eapply steps_star_trans.
-    eapply steps_star_app_l.
-    eapply steps_star_app_l.
-    eapply steps_star_I.
-
-    eapply steps_star_eq.
-    apply steps_star_t.
-
-    assert (m = m + 0)%nat by lia.
-    rewrite <- H.
-    reflexivity.
+    apply not_bcontains_var_contains_var.
+    simpl. reflexivity.
   *
     intros.
-    eapply steps_star_trans.
-    eapply steps_star_sum_op.
-
-    eapply steps_star_trans.
-    apply steps_star_app_l.
-
-    apply steps_star_app_l.
-    apply steps_star_eq_zro_Sn.
-
-    eapply steps_star_trans.
-    apply steps_star_f.
-
-    assert (m + Datatypes.S n = Datatypes.S (m + n))%nat by lia.
-    rewrite H.
-
-    assert (rep (Datatypes.S (m + n)%nat) = nxt + rep ( m + n )%nat). {
-      simpl.
-      reflexivity.
-    }
-
-    rewrite H0.
-
-    apply steps_star_app_r.
-
-    assert (prv + rep (Datatypes.S n) ~>* rep n). {
-      simpl.
-      apply prv_nxt.
-    }
-
-    eapply steps_star_trans.
-    apply steps_star_app_l.
-    apply steps_star_app_r.
-    apply H1.
-
+    apply not_bcontains_var_contains_var.
+    simpl.
+    apply <- not_bcontains_var_contains_var.
     apply IHn.
 Qed.
+
+Lemma pre_recursive_combinator2_intros_no_vars :
+  forall b r n, ~contains_var n b -> ~contains_var n r -> ~contains_var n (pre_recursive_combinator2 b r).
+Proof.
+  intros.
+  unfold pre_recursive_combinator2.
+  assert (n < 3 \/ 3 <= n) by lia.
+  destruct H1.
+  apply compile_nary_removes_vars.
+  assumption.
+  apply compile_nary_intros_no_vars.
+  unfold pre_recursive_combinator_action2.
+  destruct n. assert (1 = 0) as contra by lia. inversion contra.
+  destruct n. assert (1 = 0) as contra by lia. inversion contra.
+  destruct n. assert (1 = 0) as contra by lia. inversion contra.
+  apply not_bcontains_var_contains_var.
+  simpl.
+  apply not_bcontains_var_contains_var in H.
+  apply not_bcontains_var_contains_var in H0.
+  rewrite H.
+  simpl.
+  induction r.
+  *
+    destruct (PeanoNat.Nat.eq_decidable n0 0).
+    subst. simpl. reflexivity.
+    unfold fmap_assn.
+    simpl.
+    apply PeanoNat.Nat.eqb_neq in H2. rewrite H2.
+    simpl.
+    simpl in H0. assumption.
+  *
+    simpl. reflexivity.
+  *
+    simpl. reflexivity.
+  *
+    simpl.
+    rewrite IHr1.
+    rewrite IHr2. simpl. reflexivity.
+    simpl in H0.
+    apply Bool.orb_false_iff in H0.
+    destruct H0.
+    apply H2.
+    simpl in H0.
+    apply Bool.orb_false_iff in H0.
+    destruct H0.
+    apply H0.
+Qed.
+
+Lemma recursive_combinator2_intros_no_vars :
+  forall b r n, ~contains_var n b -> ~contains_var n r -> ~contains_var n (recursive_combinator2 b r).
+Proof.
+  intros.
+  unfold recursive_combinator2.
+  apply sage_intros_no_vars.
+  apply pre_recursive_combinator2_intros_no_vars.
+  auto. auto.
+Qed.
+
+Lemma recursive_combinator2_removes_vars :
+  forall b r n, n < 3 -> ~contains_var n b -> ~contains_var n (recursive_combinator2 b r).
+Proof.
+  intros.
+  unfold recursive_combinator2.
+  apply sage_intros_no_vars.
+  unfold pre_recursive_combinator2.
+  apply compile_nary_removes_vars.
+  assumption.
+Qed.
+
+Theorem steps_star_recursive_combinator1_base (base_case : nat) (rec : cexpr) :
+  (recursive_combinator1 base_case rec) + rep 0 ~>* rep base_case.
+Proof.
+  unfold recursive_combinator1.
+  eapply steps_star_trans.
+  apply steps_star_app_l.
+  eapply steps_star_sage.
+
+  eapply steps_star_trans.
+  apply steps_star_compile_2ary.
+
+  unfold pre_recursive_combinator_action1.
+  simpl.
+
+  eapply steps_star_trans.
+  apply steps_star_app_l.
+  apply steps_star_app_l.
+  apply steps_star_eq_zro_0.
+
+  eapply steps_star_eq.
+  apply steps_star_t.
+
+  apply subst_disjoint.
+  unfold disjoint_cexpr_fmap.
+  intros.
+
+  exfalso.
+  eapply not_contains_var_rep_n.
+  apply H.
+Qed.
+
+Theorem steps_star_recursive_combinator2_base (base_case : cexpr) (rec : cexpr) (m : cexpr) :
+  ~contains_var 0 base_case -> ~contains_var 1 base_case ->
+  (recursive_combinator2 base_case rec) + rep 0 + m  ~>* (base_case; (2 !-> m, __)).
+Proof.
+  intros.
+  unfold recursive_combinator2.
+  eapply steps_star_trans.
+  apply steps_star_app_l.
+  apply steps_star_app_l.
+  eapply steps_star_sage.
+
+  eapply steps_star_trans.
+  eapply steps_star_compile_3ary.
+
+  unfold pre_recursive_combinator_action2.
+  simpl.
+
+  eapply steps_star_trans.
+  apply steps_star_app_l.
+  apply steps_star_app_l.
+  apply steps_star_eq_zro_0.
+
+  eapply steps_star_eq.
+  apply steps_star_t.
+
+  unfold fmap_3ary.
+
+  assert (forall c c0 c1 c2 f, ~contains_var 0 c -> ~contains_var 1 c -> c ; (0 !-> c0, 1 !-> c1, 2 !-> c2, f) = c; (2 !-> c2, f)).
+  {
+    clear H H0 base_case rec m.
+    intro c.
+    induction c.
+    *
+      intros.
+      apply not_bcontains_var_contains_var in H. simpl in H.
+      apply not_bcontains_var_contains_var in H0. simpl in H0.
+      unfold fmap_assn.
+      simpl. rewrite H. rewrite H0. reflexivity.
+    *
+      intros.
+      simpl. reflexivity.
+    *
+      intros.
+      simpl. reflexivity.
+    *
+      intros.
+      simpl.
+      rewrite IHc1.
+      rewrite IHc2. reflexivity.
+
+      apply not_bcontains_var_contains_var in H; simpl in H.
+      apply Bool.orb_false_iff in H.
+      inversion H.
+      apply not_bcontains_var_contains_var in H2. assumption.
+
+      apply not_bcontains_var_contains_var in H0. simpl in H0.
+      apply Bool.orb_false_iff in H0.
+      inversion H0.
+      apply not_bcontains_var_contains_var in H2. assumption.
+
+      apply not_bcontains_var_contains_var in H. simpl in H.
+      apply Bool.orb_false_iff in H.
+      inversion H.
+      apply not_bcontains_var_contains_var in H1. assumption.
+
+      apply not_bcontains_var_contains_var in H0. simpl in H0.
+      apply Bool.orb_false_iff in H0.
+      inversion H0.
+      apply not_bcontains_var_contains_var in H1. assumption.      
+  }
+
+  apply H1. assumption. assumption.
+Qed.
+
+Lemma nxt_repn_eq_repSn : forall n, nxt + rep n = rep (Datatypes.S n).
+Proof.
+  intros.
+  simpl.
+  reflexivity.
+Qed.
+
+Lemma steps_star_rec_subst_subst1 :
+  forall r a m,
+    ((r ; (0 !-> var 0 + (prv + var 1), __)) ; (0 !-> a, 1 !-> m, __)) = (r ; (0 !-> (a + (prv + m)), 1 !-> m,  __)).
+Proof.
+  intros.
+  induction r.
+  *
+    destruct n.
+    simpl. reflexivity.
+
+    destruct n.
+    simpl. reflexivity.
+
+    simpl. reflexivity.
+  *
+    simpl. reflexivity.
+  *
+    simpl. reflexivity.
+  *
+    simpl. rewrite IHr1. rewrite IHr2. reflexivity.
+Qed.
+
+Lemma steps_star_rec_subst_subst2 :
+  forall r a m n,
+    ((r ; (0 !-> var 0 + (prv + var 1) + var 2, __)) ; (0 !-> a, 1 !-> m, 2 !-> n, __)) = (r ; (0 !-> (a + (prv + m) + n), 1 !-> m,  2 !-> n, __)).
+Proof.
+  intros.
+  induction r.
+  *
+    destruct n0.
+    simpl. reflexivity.
+
+    destruct n0.
+    simpl. reflexivity.
+
+    destruct n0.
+    simpl. reflexivity.
+
+    simpl. reflexivity.
+  *
+    simpl. reflexivity.
+  *
+    simpl. reflexivity.
+  *
+    simpl. rewrite IHr1. rewrite IHr2. reflexivity.
+Qed.
+
+
+Theorem steps_star_subst_alt : forall c c1 c2 f n,
+    c1 ~>* c2 -> (c ; (n !-> c1, f)) ~>* (c ; (n !-> c2, f)).
+Proof.
+  intros.
+  induction c.
+  *
+    destruct (PeanoNat.Nat.eq_decidable n0 n).
+    **
+      subst.
+      unfold fmap_assn.
+      simpl.
+      rewrite PeanoNat.Nat.eqb_refl.
+      assumption.
+    **
+      unfold fmap_assn.
+      simpl.
+      apply PeanoNat.Nat.eqb_neq in H0.
+      rewrite H0.
+      apply steps_none.
+  *
+    simpl. apply steps_none.
+  *
+    simpl. apply steps_none.
+  *
+    simpl.
+    eapply steps_star_trans.
+    apply steps_star_app_l.
+    apply IHc1.
+    apply steps_star_app_r.
+    apply IHc2.
+Qed.
+
+(* Theorem fmap_assn_swap : forall c c1 c2 f m n, *)
+(*     m <> n -> *)
+(*     ~contains_var n c2 -> *)
+(*     (c ; (n !-> c1, m !-> c2, f)) = (c ; (m !-> c2, n !-> c1, f)). *)
+(* Proof. *)
+(*   intros. *)
+(*   induction c. *)
+(*   * *)
+(*     destruct (PeanoNat.Nat.eq_decidable n0 m). *)
+(*     ** *)
+(*       subst. *)
+(*       unfold fmap_assn. simpl. *)
+(*       apply PeanoNat.Nat.eqb_neq in H. rewrite H. *)
+(*       rewrite PeanoNat.Nat.eqb_refl. *)
+(*       reflexivity. *)
+(*     ** *)
+(*       destruct (PeanoNat.Nat.eq_decidable n0 n). *)
+(*       *** *)
+(*         subst. *)
+(*         unfold fmap_assn. simpl. *)
+(*         rewrite PeanoNat.Nat.eqb_refl. *)
+(*         apply PeanoNat.Nat.eqb_neq in H1. *)
+(*         rewrite H1. *)
+(*         reflexivity. *)
+(*       *** *)
+(*         apply PeanoNat.Nat.eqb_neq in H1. *)
+(*         apply PeanoNat.Nat.eqb_neq in H2. *)
+(*         unfold fmap_assn. simpl. rewrite H1. rewrite H2. *)
+(*         reflexivity. *)
+(*   * *)
+(*     simpl. reflexivity. *)
+(*   * *)
+(*     simpl. reflexivity. *)
+(*   * *)
+(*     simpl. *)
+(*     rewrite IHc1. *)
+(*     rewrite IHc2. *)
+(*     reflexivity. *)
+(* Qed. *)
+
+Theorem steps_star_recursive_combinator1_recursive (base_case : nat) (rec : cexpr) :
+  forall n, (recursive_combinator1 base_case rec) + rep (Datatypes.S n) ~>*
+            (rec ; (0 !-> (recursive_combinator1 base_case rec) + rep n, 1 !-> rep (Datatypes.S n), __)).
+Proof.
+  intros.
+  unfold recursive_combinator1.
+  eapply steps_star_trans.
+  eapply steps_star_app_l.
+  apply steps_star_sage.
+  unfold pre_recursive_combinator1.
+  eapply steps_star_trans.
+  apply steps_star_compile_2ary.
+  unfold fmap_2ary.
+
+  unfold pre_recursive_combinator_action1.
+  eapply steps_star_trans.
+  simpl.
+  apply steps_star_app_l.
+  apply steps_star_app_l.
+  apply steps_star_eq_zro_Sn.
+
+  eapply steps_star_trans.
+  apply steps_star_f.
+
+  rewrite steps_star_rec_subst_subst1.
+  
+  apply steps_star_subst_alt.
+  apply steps_star_app_r.
+  apply prv_nxt.
+Qed.
+
+Theorem steps_star_recursive_combinator2_recursive (base_case : cexpr) (rec : cexpr) :
+  forall n m,
+    ~contains_var 0 base_case -> ~contains_var 1 base_case ->
+    (recursive_combinator2 base_case rec) + rep (Datatypes.S n) + rep m ~>*
+            (rec ; (0 !-> (recursive_combinator2 base_case rec) + rep n + rep m, 1 !-> rep (Datatypes.S n), 2 !-> rep m, __)).
+Proof.
+  intros.
+  unfold recursive_combinator2.
+  eapply steps_star_trans.
+  eapply steps_star_app_l.
+  eapply steps_star_app_l.
+  apply steps_star_sage.
+  unfold pre_recursive_combinator2.
+  eapply steps_star_trans.
+  apply steps_star_compile_3ary.
+  unfold fmap_3ary.
+
+  unfold pre_recursive_combinator_action2.
+  eapply steps_star_trans.
+  simpl.
+  apply steps_star_app_l.
+  apply steps_star_app_l.
+  apply steps_star_eq_zro_Sn.
+
+  eapply steps_star_trans.
+  apply steps_star_f.
+
+  rewrite steps_star_rec_subst_subst2.
+  
+  apply steps_star_subst_alt.
+  apply steps_star_app_l.
+  apply steps_star_app_r.
+  apply prv_nxt.
+Qed.
+  
+Definition recurses1 (f : nat -> nat) rec :=
+  forall n, (rec ; (0 !-> rep (f n), 1 !-> rep (Datatypes.S n),  __)) ~>* rep (f (Datatypes.S n)).
+
+Definition recurses2 (f : nat -> nat -> nat) base rec :=
+  ~contains_var 0 base /\
+  ~contains_var 1 base /\
+  (forall m, (base ; (2 !-> rep m, __)) ~>* rep (f 0 m)) /\
+  forall n m, (rec ; (0 !-> rep (f n m), 1 !-> rep (Datatypes.S n), 2 !-> rep m,  __)) ~>* rep (f (Datatypes.S n) m).
+
+Theorem fixpoint_principle1 :
+  forall (f : nat -> nat) rec, recurses1 f rec ->
+                               forall n,
+                                 recursive_combinator1 (f 0) rec + rep n ~>* rep (f n).
+Proof.
+  intros.
+  induction n.
+  *
+    apply steps_star_recursive_combinator1_base.
+  *
+    eapply steps_star_trans.
+    apply steps_star_recursive_combinator1_recursive.
+    eapply steps_star_trans.
+    eapply steps_star_subst_alt.
+    apply IHn.
+    apply H.
+Qed.
+
+Theorem fixpoint_principle2 :
+  forall (f : nat -> nat -> nat) base rec,
+    recurses2 f base rec ->
+    forall n m,
+      recursive_combinator2 base rec + rep n + rep m ~>* rep (f n m).
+Proof.
+  intros.
+  destruct H. destruct H0. destruct H1.
+  induction n.
+  *
+    eapply steps_star_trans.
+    apply steps_star_recursive_combinator2_base.
+    assumption. assumption. apply H1.
+  *
+    eapply steps_star_trans.
+    apply steps_star_recursive_combinator2_recursive.
+    assumption. assumption.
+
+    eapply steps_star_trans.
+    eapply steps_star_subst_alt.
+    apply IHn.
+    apply H2.
+Qed.    
+
+(* The op that adds n to every input *)
+Definition add_m_n_base := var 2. 
+Definition add_m_n_rec := nxt + var 0.
+Definition add_m_n_op := (recursive_combinator2 add_m_n_base add_m_n_rec).
+Theorem add_m_n_works : forall m n, add_m_n_op + (rep m) + (rep n) ~>* rep (m + n).
+Proof.
+  intros.
+  pose (fun m' n' => (m' + n')%nat) as f.
+  eapply steps_star_trans.
+  unfold add_m_n_op.
+
+  eapply fixpoint_principle2.
+  unfold recurses2.
+  split.
+  apply not_bcontains_var_contains_var. simpl. reflexivity.
+  split.
+  apply not_bcontains_var_contains_var. simpl. reflexivity.
+  split.
+  intros.
+  simpl.
+  assert (f 0 m0 = m0) by reflexivity.
+  rewrite H.
+  apply steps_none.
+
+  intros.
+  unfold add_m_n_rec.
+  simpl.
+  apply steps_none.
+
+  unfold f.
+  apply steps_none.
+Qed.
+
+Theorem add_m_n_op_contains_no_vars : forall n, ~contains_var n (add_m_n_op).
+Proof.
+  intros.
+  rewrite <- not_bcontains_var_contains_var.
+  simpl.
+  reflexivity.
+Qed.
+
+(* The op that muls inputs together *)
+Definition mul_m_n_base := rep 0. 
+Definition mul_m_n_rec := add_m_n_op + var 0 (* (m-1)n *) + var 2 (* n *).
+Definition mul_m_n_op := (recursive_combinator2 mul_m_n_base mul_m_n_rec).
+
+Theorem mul_m_n_op_contains_no_vars :
+  forall n, ~contains_var n mul_m_n_op.
+Proof.
+  intros.
+  unfold mul_m_n_op.
+  assert (n < 3 \/ 3 <= n) by lia.
+  destruct H.
+  *
+    apply recursive_combinator2_removes_vars. assumption.
+    unfold mul_m_n_base.
+    apply not_bcontains_var_contains_var.
+    simpl. reflexivity.
+  *
+    apply recursive_combinator2_intros_no_vars.
+    unfold mul_m_n_base.
+    apply not_bcontains_var_contains_var. simpl. reflexivity.
+    unfold mul_m_n_rec.
+    apply not_bcontains_var_contains_var.
+    unfold bcontains_var.
+    fold bcontains_var.
+    assert (bcontains_var n add_m_n_op = false). {
+      apply not_bcontains_var_contains_var.
+      apply add_m_n_op_contains_no_vars.
+    }
+    rewrite H0.
+    destruct n. assert (1 = 0) as contra by lia. inversion contra.
+    destruct n. assert (1 = 0) as contra by lia. inversion contra.
+    destruct n. assert (1 = 0) as contra by lia. inversion contra.
+    simpl. reflexivity.
+Qed.
+  
+Theorem mul_m_n_works : forall m n, mul_m_n_op + (rep m) + (rep n) ~>* rep (m * n).
+Proof.
+  intros.
+  pose (fun m' n' => (m' * n')%nat) as f.
+  eapply steps_star_trans.
+  unfold mul_m_n_op.
+
+  eapply fixpoint_principle2.
+  unfold recurses2.
+  split.
+  apply not_bcontains_var_contains_var. simpl. reflexivity.
+  split.
+  apply not_bcontains_var_contains_var. simpl. reflexivity.
+  split.
+  intros.
+  simpl.
+  assert (f 0 m0 = 0) by reflexivity.
+  rewrite H.
+  apply steps_none.
+
+  intros.
+  unfold mul_m_n_rec.
+
+  assert (add_m_n_op + var 0 + var 2; (0 !-> rep (f n0 m0), 1 !-> rep (Datatypes.S n0), 2 !-> rep m0, __) = add_m_n_op + rep (f n0 m0) + rep m0). {
+    reflexivity.
+  }
+  rewrite H.
+  eapply steps_star_eq.
+  apply add_m_n_works.
+  unfold f.
+  assert (n0 * m0 + m0 = Datatypes.S n0 * m0)%nat by lia.
+  rewrite H0.
+  reflexivity.
+  unfold f.
+
+  apply steps_none.
+Qed.
+
+Definition pow_n_m_base := rep 1. 
+Definition pow_n_m_rec := mul_m_n_op + var 0 (* n^(m-1) *) + var 2 (* n *).
+Definition pow_n_m_op := (recursive_combinator2 pow_n_m_base pow_n_m_rec).
+
+Theorem pow_n_m_op_contains_no_vars :
+  forall n, ~contains_var n pow_n_m_op.
+Proof.
+  intros.
+  unfold pow_n_m_op.
+  assert (n < 3 \/ 3 <= n) by lia.
+  destruct H.
+  *
+    apply recursive_combinator2_removes_vars. assumption.
+    unfold pow_n_m_base.
+    apply not_bcontains_var_contains_var.
+    simpl. reflexivity.
+  *
+    apply recursive_combinator2_intros_no_vars.
+    unfold pow_n_m_base.
+    apply not_bcontains_var_contains_var. simpl. reflexivity.
+    unfold pow_n_m_rec.
+    apply not_bcontains_var_contains_var.
+    unfold bcontains_var.
+    fold bcontains_var.
+    assert (bcontains_var n mul_m_n_op = false). {
+      apply not_bcontains_var_contains_var.
+      apply mul_m_n_op_contains_no_vars.
+    }
+    rewrite H0.
+    destruct n. assert (1 = 0) as contra by lia. inversion contra.
+    destruct n. assert (1 = 0) as contra by lia. inversion contra.
+    destruct n. assert (1 = 0) as contra by lia. inversion contra.
+    simpl. reflexivity.
+Qed.
+
+Theorem pow_n_m_works : forall m n, pow_n_m_op + (rep m) + (rep n) ~>* rep (pow n m).
+Proof.
+  intros.
+  pose (fun m' n' => (pow n' m')%nat) as f.
+  eapply steps_star_trans.
+  unfold pow_n_m_op.
+
+  eapply fixpoint_principle2.
+  unfold recurses2.
+  split.
+  apply not_bcontains_var_contains_var. simpl. reflexivity.
+  split.
+  apply not_bcontains_var_contains_var. simpl. reflexivity.
+  split.
+  intros.
+  unfold pow_n_m_base.
+  assert (f 0 m0 = 1) by reflexivity.
+  rewrite H.
+  apply steps_none.
+
+  intros.
+  unfold pow_n_m_rec.
+  rewrite subst_app_distr.
+  rewrite subst_app_distr.
+
+  assert (forall f, mul_m_n_op ; f = mul_m_n_op). {
+    intros.
+    apply subst_disjoint.
+    unfold disjoint_cexpr_fmap.
+    intros.
+    apply mul_m_n_op_contains_no_vars in H.
+    exfalso. apply H.
+  }
+
+  rewrite H.
+  assert (var 0; (0 !-> rep (f n0 m0), 1 !-> rep (Datatypes.S n0), 2 !-> rep m0, __) = rep (f n0 m0)). {
+    reflexivity.
+  }
+  rewrite H0.
+
+  assert (var 2; (0 !-> rep (f n0 m0), 1 !-> rep (Datatypes.S n0), 2 !-> rep m0, __) = rep m0) by reflexivity.
+  rewrite H1.
+
+  eapply steps_star_eq.
+  apply mul_m_n_works.
+  unfold f.
+
+  unfold pow. fold pow.
+  Search (_ * _ = _ * _)%nat.
+  rewrite PeanoNat.Nat.mul_comm.
+  reflexivity.
+
+  apply steps_none.
+Qed.
+
+Definition pow_m_n_op := C + pow_n_m_op.
+Theorem pow_m_n_op_works : forall m n, pow_m_n_op + (rep m) + (rep n) ~>* rep (pow m n).
+Proof.
+  intros.
+  unfold pow_m_n_op.
+  eapply steps_star_trans.
+  apply steps_star_C.
+  apply pow_n_m_works.
+Qed.
+
+(* length measuring *)
+
+
 
 Notation "[ x ; .. ; y ]" := (cons x .. (cons y nil) .. ).
 
