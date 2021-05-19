@@ -1,0 +1,14 @@
+*.vo
+*.vos
+*.vok
+*.glob
+*.aux
+*.cache
+.CoqMakefile.d
+.Makefile.d
+CoqMakefile
+CoqMakefile.conf
+Makefile
+Makefile.conf
+Makefile.d
+TAGS
