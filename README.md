@@ -6,7 +6,7 @@ make
 Walkthrough
 ----------
 The documentation below describes the main theorem statements and definitions of this development.
-The proofs are found within the source.
+The proofs are found within the source. The proofs are adapted from Raymond Smullyan's "To Mock a Mockingbird".
 
 The SKI Combinators
 ------------------
@@ -158,8 +158,7 @@ Theorem godelize_spec : forall n : nat, godelize_op [+] rep n ~>* rep (godel_num
 
 Computability
 ------------
-A predicate over the natural numbers is computable if there is a constant SK expression which computes to `t`
-if a number satisifies the predicate and false otherwise.
+A predicate `P` over the natural numbers is computable if there is a constant SK expression `c` which steps to `t` when fed any number belonging to `P`, and steps to `f` when fed any number not belonging to `P`.
 ```
 (* src/godel.v *)
 
@@ -168,33 +167,35 @@ Definition is_computable (P : nat -> Prop) := exists c, is_const c /\ (forall n,
 
 Godel's Theorem
 ---------------
-A Godel sentence for a predicate `P` is a SK expression which reduces to `t` if and only if its own Godel number satisfies `P`.
+A Godel sentence for a predicate `P` is a constant SK expression which steps to `t` if and only if its own Godel number satisfies `P`.
+When `c` is a Godel sentence for `P`, `c` says "My Godel number belongs in P".
 ```
 (* src/godel.v *)
 
 Definition godel_sentence (P : nat -> Prop) (c : expr) := is_const c /\ ((c ~>* t /\ P (godel_number c)) \/ (~ c ~>* t /\ ~P (godel_number c))).
 ```
 
-When `c` is a Godel sentence for `P`, `c` says "My Godel belongs in P". A Godel sentence can be constructed for every computable predicate.
-
+ A Godel sentence can be constructed for every computable predicate.
 ```
 (* src/godel.v *)
 
 Theorem computable_prop_has_godel_sentence : forall P, is_computable P -> exists g, godel_sentence P g.
 ```
 
-Godel showed that not every predicate is computable. In particular, consider the set of all Godel numbers who are associated to expressions which reduce to `t`.
+Godel showed that not every predicate is computable. In particular, consider the set of all Godel numbers who are associated to expressions which steps to `t`.
 ```
 (* src/godel.v *)
 
 Definition converges_t n := exists c, n = godel_number c /\ c ~>* t.
 ```
 
-If this predicate `converges_t` were computable, so would the predicate `not_converges_t := fun n => ~converges_t n`. Then it would have a Godel sentence by `computable_prop_has_godel_sentence`. This leads to a liar's paradox and therefore we know `converges_t` is not computable.
+If this predicate `converges_t` were computable, so would the predicate `not_converges_t := fun n => ~converges_t n`. Then it would have a Godel sentence `g` by `computable_prop_has_godel_sentence`. The sentence `g` would say "My Godel number does not converge to t." This leads to a liar's paradox and therefore we know `converges_t` is not computable.
 
 ```
 Theorem converges_t_not_computable : ~is_computable converges_t.
 ```
+
+We conclude that there are sets of natural numbers which are well defined, but cannot be computed by SK expressions.
 
 Technicalities
 --------------
