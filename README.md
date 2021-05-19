@@ -3,6 +3,11 @@ Build
 coq_makefile -f _CoqProject src/*.v -o Makefile  
 make
 
+Walkthrough
+----------
+The documentation below describes the main theorem statements and definitions of this development.
+The proofs are found within the source.
+
 The SKI Combinators
 ------------------
 ```
@@ -34,6 +39,7 @@ Notation " a ~>* b " := (steps_star a b) (at level 55, left associativity).
 
 These are the standard definitions of the S and K combinator system, with the addition of variable terms like `var n`.
 We can speak about whether expressions contain variables. Expressions which contain no variables are called constants.
+The addition of variables allows us to build a small compiler using the concept of alpha-elimination (see src/compile.v).
 
 ```
 (* src/expr.v *)
@@ -188,4 +194,28 @@ If this predicate `converges_t` were computable, so would the predicate `not_con
 
 ```
 Theorem converges_t_not_computable : ~is_computable converges_t.
+```
+
+Technicalities
+--------------
+There are some technicalities that need to be overcome during the course of the development.
+First, we need to show the model of computation described by the stepping / reduction `~>*` operator is well defined and doesn't depend on the order of reductions. This is addressed by the Church-Rosser theorem, which proves that normal forms are unique.
+```
+(* src/expr.v *)
+
+Definition is_normal c := forall c', ~ c ~> c'.
+```
+
+```
+(* src/church_rosser.v *)
+
+Theorem unique_normal_form : forall c c1 c2, c ~>* c1 -> c ~>* c2 -> is_normal c1 -> is_normal c2 -> c1 = c2.
+```
+
+Second, we need to that a list of Godel digits uniquely specifies an expression.
+```
+(* src/godel.v *)
+
+Definition has_unambiguous_parse l := forall c1, is_const c1 /\ l = godel_digits c1 -> forall c2, l = godel_digits c2 -> c1 = c2.
+Theorem all_unambiguous_parse : forall l, has_unambiguous_parse l.
 ```
