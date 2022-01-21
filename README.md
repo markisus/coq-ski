@@ -37,7 +37,7 @@ Inductive steps_star : expr -> expr -> Prop :=
 Notation " a ~>* b " := (steps_star a b) (at level 55, left associativity).
 ```
 
-These are the standard definitions of the S and K combinator system, with the addition of variable terms like `var n`.
+These are the standard definitions of the S and K combinator system, with the addition of variable terms like `var 0`, `var 1`, `var 2` ... etc.
 We can speak about whether expressions contain variables. Expressions which contain no variables are called constants.
 The addition of variables allows us to build a small compiler using the concept of alpha-elimination (see src/compile.v).
 
