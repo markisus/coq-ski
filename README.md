@@ -38,8 +38,8 @@ Notation " a ~>* b " := (steps_star a b) (at level 55, left associativity).
 ```
 
 These are the standard definitions of the S and K combinator system, with the addition of variable terms like `var 0`, `var 1`, `var 2` ... etc.
-We can speak about whether expressions contain variables. Expressions which contain no variables are called constants.
-The addition of variables allows us to build a small compiler using the concept of alpha-elimination (see src/compile.v).
+We can speak about whether expressions contain variables. For example, expression `K [+] (var 0)` contains variable `var 0` but not `var 1`. Expressions which contain no variables are called constants. For example, `K [+] S [+] S` is a constant since it contains no terms like `var n`.
+The addition of variables will allow us to build a small compiler using the concept of alpha-elimination (see src/compile.v).
 
 ```
 (* src/expr.v *)
